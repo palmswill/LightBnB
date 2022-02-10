@@ -4,6 +4,7 @@ const users = require("./json/users.json");
 // pg connect
 
 const { Pool } = require("pg");
+const { _pools } = require("pg/lib");
 
 const pool = new Pool({
   user: "labber",
@@ -120,7 +121,7 @@ const getAllProperties = (options, limit = 2) => {
   // minimum_price_per_night
   if (options.minimum_price_per_night) {
     if (options.minimum_price_per_night) {
-      queryParams.push(Number(options.minimum_price_per_night)*100);
+      queryParams.push(Number(options.minimum_price_per_night) * 100);
       if (queryParams.length > 1) {
         clause = "AND";
       }
@@ -131,18 +132,18 @@ const getAllProperties = (options, limit = 2) => {
   // maximum_price_per_night
   if (options.maximum_price_per_night) {
     if (options.maximum_price_per_night) {
-      queryParams.push(Number(options.maximum_price_per_night)*100);
+      queryParams.push(Number(options.maximum_price_per_night) * 100);
       if (queryParams.length > 1) {
         clause = "AND";
       }
       queryString += `${clause} cost_per_night <= $${queryParams.length}`;
     }
   }
-// limit query
+  // limit query
   queryString += `
   GROUP BY properties.id
   ORDER BY cost_per_night
-  LIMIT $${queryParams.length+2}`;
+  LIMIT $${queryParams.length + 2}`;
 
   // minimum_rating
   if (options.minimum_rating) {
@@ -153,17 +154,13 @@ const getAllProperties = (options, limit = 2) => {
     queryString = ` SELECT * FROM (${queryString}) as result WHERE average_rating >= $${queryParams.length};`;
   }
 
-
   // limit
   queryParams.push(limit);
-  
-
 
   return pool
     .query(queryString, queryParams)
     .then((result) => {
-      return result.rows
-    
+      return result.rows;
     })
     .catch((err) => {
       console.log(err.message);
@@ -177,9 +174,35 @@ exports.getAllProperties = getAllProperties;
  * @return {Promise<{}>} A promise to the property.
  */
 const addProperty = function (property) {
-  const propertyId = Object.keys(properties).length + 1;
-  property.id = propertyId;
-  properties[propertyId] = property;
-  return Promise.resolve(property);
+  let column = [];
+  let value = [];
+  let columnString = "";
+  let valueString = "";
+  Object.keys(property).forEach((key) => {
+    if (property[key]) {
+      column.push(key);
+      value.push(property[key]);
+    }
+  });
+  let params = column.concat(value);
+  for (let index of params) {
+    let heading = ",";
+    if (index === 0 || index === params.length / 2) {
+      heading = "";
+    }
+    if (index < params.length / 2) {
+      columnString += heading + `$${index+1}`;
+    } else {
+      valueString += heading + `$${index+1}`;
+    }
+  }
+
+  return pool
+    .query(
+      `INSERT INTO properties (${columnsString}) VALUES (${valueString}) RETURNING *;`,
+      params
+    )
+    .then((result) => result.rows[0])
+    .catch((err) => console.log(err));
 };
 exports.addProperty = addProperty;
